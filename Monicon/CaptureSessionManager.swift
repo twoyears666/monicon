@@ -268,16 +268,18 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
 
 extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     func uvcBackendDidStart(withWidth width: UInt, height: UInt, fps: UInt) {
+        var audioLive = false
         if audioEnabled {
             do {
                 try captureCardAudio.start()
+                audioLive = true
                 log("USB audio route active")
             } catch {
                 log("ERROR audio start: \(error.localizedDescription)")
-                status = "USB video opened; capture-card audio unavailable"
             }
         }
-        status = audioEnabled ? "Direct UVC live • capture-card audio" : "Direct UVC live • audio off"
+        status = audioLive ? "Direct UVC live • capture-card audio"
+            : (audioEnabled ? "USB video opened; capture-card audio unavailable" : "Direct UVC live • audio off")
         isRunning = true
     }
 
