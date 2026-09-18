@@ -12,6 +12,7 @@
 <key>MinimumOSVersion</key><string>16.0</string>
 <key>NSCameraUsageDescription</key><string>Monicon uses the connected UVC capture card for video.</string>
 <key>NSMicrophoneUsageDescription</key><string>Monicon uses USB audio from the connected capture card.</string>
+<key>NSPhotoLibraryAddUsageDescription</key><string>Monicon saves screenshots and recordings from the capture card.</string>
 <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
 <key>UILaunchScreen</key><dict><key>UIColorName</key><string>LaunchBackground</string></dict>
 </dict></plist>
