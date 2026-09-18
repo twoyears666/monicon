@@ -1,4 +1,4 @@
-name: Build Monicon
+name: Build Monicon TrollStore TIPA
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  tipa:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Build unsigned iPadOS app
+      - name: Build iPadOS 16 app
         run: |
           xcodebuild \
             -project Monicon.xcodeproj \
@@ -18,26 +18,17 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DerivedData \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
-      - name: Package IPA
+      - name: Package TrollStore TIPA
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/Monicon.app build/Payload/
-          cd build && zip -qry Monicon-unsigned.ipa Payload
+          cd build
+          zip -qry Monicon-ios16.tipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: Monicon-unsigned-ipa
-          path: build/Monicon-unsigned.ipa
-
-  tipa:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build TrollStore packaging hook
-        run: |
-          echo "TrollStore packaging requires a device-owner supplied signing/injection step."
-          echo "The unsigned IPA from the build job is the input artifact."
-
+          name: Monicon-ios16-tipa
+          path: build/Monicon-ios16.tipa
