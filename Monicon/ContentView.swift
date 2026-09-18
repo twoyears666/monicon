@@ -167,6 +167,15 @@ struct SettingsView: View {
                     }
                     Text(L("settings.audio.help")).font(.caption).foregroundStyle(.secondary)
                 }
+                Section(L("settings.log")) {
+                    Toggle(isOn: Binding(
+                        get: { capture.logMode },
+                        set: { capture.setLogMode($0) }
+                    )) {
+                        Label(L("settings.log"), systemImage: "waveform.path.ecg")
+                    }
+                    Text(L("settings.log.help")).font(.caption).foregroundStyle(.secondary)
+                }
                 Section(L("settings.video")) {
                     Picker(L("settings.video.mode"), selection: $capture.displayMode) {
                         ForEach(VideoDisplayMode.allCases) { mode in
