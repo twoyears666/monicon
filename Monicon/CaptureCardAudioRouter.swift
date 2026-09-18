@@ -5,21 +5,28 @@ final class CaptureCardAudioRouter {
     private var isRunning = false
 
     func start() throws {
+        MoniconDiagnostics.write("audio.step", "begin")
         let session = AVAudioSession.sharedInstance()
+        MoniconDiagnostics.write("audio.step", "setCategory")
         try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+        MoniconDiagnostics.write("audio.step", "setActive")
         try session.setActive(true, options: [])
+        MoniconDiagnostics.write("audio.step", "overrideSpeaker")
         try? session.overrideOutputAudioPort(.speaker)
 
+        MoniconDiagnostics.write("audio.route", "availableInputs=\(session.availableInputs?.count ?? 0)")
         guard let inputs = session.availableInputs,
               let usbInput = inputs.first(where: { $0.portType == .usbAudio }) else {
             let ports = session.availableInputs?.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ") ?? "none"
             throw NSError(domain: "MoniconAudio", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "No USB capture-card audio input. Available: \(ports)"])
         }
+        MoniconDiagnostics.write("audio.route", "selected=\(usbInput.portName)")
         try session.setPreferredInput(usbInput)
 
         let input = engine.inputNode
+        MoniconDiagnostics.write("audio.engine", "prepare")
         if engine.isRunning { engine.stop() }
         engine.disconnectNodeOutput(input)
         engine.disconnectNodeInput(engine.mainMixerNode)
@@ -28,10 +35,13 @@ final class CaptureCardAudioRouter {
             throw NSError(domain: "MoniconAudio", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "USB audio format is unavailable"])
         }
+        MoniconDiagnostics.write("audio.engine", "connectInput")
         engine.connect(input, to: engine.mainMixerNode, format: nil)
         engine.mainMixerNode.outputVolume = 1.0
         engine.prepare()
+        MoniconDiagnostics.write("audio.engine", "start")
         try engine.start()
+        MoniconDiagnostics.write("audio.engine", "started")
         isRunning = true
     }
 
