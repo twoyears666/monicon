@@ -2,8 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleDisplayName</key><string>Monicon</string>
+<key>CFBundleExecutable</key><string>Monicon</string>
+<key>CFBundleIdentifier</key><string>com.monicon.app</string>
+<key>CFBundleName</key><string>Monicon</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>MinimumOSVersion</key><string>16.0</string>
 <key>NSCameraUsageDescription</key><string>Monicon uses the connected UVC capture card for video.</string>
-<key>NSMicrophoneUsageDescription</key><string>Monicon uses audio from the connected capture card.</string>
+<key>NSMicrophoneUsageDescription</key><string>Monicon uses USB audio from the connected capture card.</string>
 <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
 <key>UILaunchScreen</key><dict><key>UIColorName</key><string>LaunchBackground</string></dict>
 </dict></plist>
