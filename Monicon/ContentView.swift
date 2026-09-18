@@ -22,7 +22,13 @@ struct ContentView: View {
                 GeometryReader { proxy in
                     ZStack {
                         RoundedRectangle(cornerRadius: 18).fill(Color(red: 0.06, green: 0.07, blue: 0.09))
-                        if capture.isRunning {
+                        if let directImage = capture.directImage {
+                            Image(decorative: directImage, scale: 1, orientation: .up)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .padding(10)
+                        } else if capture.isRunning {
                             VideoPreview(session: capture.session)
                                 .aspectRatio(16 / 9, contentMode: .fit)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
