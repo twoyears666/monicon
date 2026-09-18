@@ -22,8 +22,12 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var devices: [AVCaptureDevice] = []
     @Published var directImage: CGImage?
     @Published var usesDirectUVC = true
-    @Published var displayMode: VideoDisplayMode = .fit
-    @Published var resolutionScale = 100
+    @Published var displayMode: VideoDisplayMode = .fit {
+        didSet { if oldValue != displayMode { log("video.display", "mode=\(displayMode.rawValue)") } }
+    }
+    @Published var resolutionScale = 100 {
+        didSet { if oldValue != resolutionScale { log("video.scale", "scale=\(resolutionScale)%") } }
+    }
     @Published var audioEnabled = true
     @Published var isRecording = false
     @Published var lastAction = ""
@@ -35,6 +39,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     private var currentFrameWidth = 0
     private var currentFrameHeight = 0
     private var logTimer: Timer?
+    private var lastLoggedFrameSize = ""
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -66,15 +71,33 @@ final class CaptureSessionManager: NSObject, ObservableObject {
         logTimer = nil
         if enabled {
             logTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                self?.log("ok")
+                self?.log("heartbeat", "ok")
             }
-            log("log mode enabled")
+            log("log.mode", "enabled; file=Documents/monicon.log")
         }
     }
 
-    private func log(_ message: String) {
-        guard logMode || message.hasPrefix("ERROR") else { return }
-        print("[Monicon][\(message.hasPrefix("ERROR") ? "error" : "log")] \(message)")
+    private func log(_ section: String, _ message: String) {
+        let isError = section.hasPrefix("ERROR") || message.hasPrefix("ERROR")
+        guard logMode || isError else { return }
+        let level = isError ? "error" : "log"
+        let line = "[Monicon][\(level)][\(section)] \(message)"
+        print(line)
+        do {
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let url = documents.appendingPathComponent("monicon.log")
+            let data = (line + "\n").data(using: .utf8) ?? Data()
+            if FileManager.default.fileExists(atPath: url.path) {
+                let handle = try FileHandle(forWritingTo: url)
+                try handle.seekToEnd()
+                try handle.write(contentsOf: data)
+                try handle.close()
+            } else {
+                try data.write(to: url, options: .atomic)
+            }
+        } catch {
+            print("[Monicon][error][log.file] \(error.localizedDescription)")
+        }
     }
 
     func refreshDevices() {
@@ -83,7 +106,9 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func start(device: AVCaptureDevice? = nil) {
+        log("capture.start", "requested; directUVC=\(usesDirectUVC)")
         if usesDirectUVC {
+            log("uvc.start", "request native resolution; fps=60")
             directBackend.start(withWidth: 0, height: 0, fps: 60)
             DispatchQueue.main.async {
                 self.isRunning = true
@@ -128,6 +153,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func stop() {
+        log("capture.stop", "requested")
         if isRecording { finishRecording() }
         if usesDirectUVC {
             directBackend.stop()
@@ -151,6 +177,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func setAudioEnabled(_ enabled: Bool) {
+        log("audio.toggle", "enabled=\(enabled)")
         audioEnabled = enabled
         guard isRunning else { return }
         if enabled {
@@ -163,7 +190,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
                 }
                 status = "Live • capture-card audio only"
             } catch {
-                log("ERROR audio toggle: \(error.localizedDescription)")
+                log("ERROR.audio.toggle", error.localizedDescription)
                 audioEnabled = false
                 status = "USB video live • capture-card audio unavailable"
             }
@@ -179,6 +206,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func toggleRecording() {
+        log("recording.toggle", "isRecording=\(isRecording)")
         if isRecording {
             finishRecording()
             return
@@ -206,6 +234,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func takeScreenshot() {
+        log("screenshot", "requested")
         guard let directImage else {
             lastAction = "暂无画面可截图"
             return
@@ -268,14 +297,15 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
 
 extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     func uvcBackendDidStart(withWidth width: UInt, height: UInt, fps: UInt) {
+        log("uvc.ready", "width=\(width) height=\(height) fps=\(fps)")
         var audioLive = false
         if audioEnabled {
             do {
                 try captureCardAudio.start()
                 audioLive = true
-                log("USB audio route active")
+                log("audio.ready", "USB audio route active")
             } catch {
-                log("ERROR audio start: \(error.localizedDescription)")
+                log("ERROR.audio", error.localizedDescription)
             }
         }
         status = audioLive ? "Direct UVC live • capture-card audio"
@@ -287,6 +317,11 @@ extension CaptureSessionManager: MNDirectUVCBackendDelegate {
         let sourceWidth = Int(width)
         let sourceHeight = Int(height)
         let scale = max(25, min(100, resolutionScale))
+        let frameSize = "\(sourceWidth)x\(sourceHeight) -> \(scale)%"
+        if frameSize != lastLoggedFrameSize {
+            lastLoggedFrameSize = frameSize
+            log("video.frame", frameSize)
+        }
         let targetWidth = max(1, sourceWidth * scale / 100)
         let targetHeight = max(1, sourceHeight * scale / 100)
         let source = [UInt8](rgb)
@@ -318,7 +353,7 @@ extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     }
 
     func uvcBackendDidFail(_ message: String) {
-        log("ERROR UVC: \(message)")
+        log("ERROR.uvc", message)
         isRunning = false
         status = "Direct UVC failed: \(message)"
     }
