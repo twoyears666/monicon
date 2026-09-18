@@ -1,4 +1,4 @@
-"app.name" = "UVC读卡器";
+"app.name" = "univulcal";
 "status.live" = "直播中";
 "status.idle" = "未连接";
 "button.start" = "开始";
