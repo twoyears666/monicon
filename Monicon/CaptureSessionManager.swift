@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import CoreMedia
+import CoreGraphics
 
 final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var isRunning = false
@@ -8,6 +9,10 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var selectedResolution = "Auto"
     @Published var selectedFrameRate = "Auto"
     @Published var devices: [AVCaptureDevice] = []
+    @Published var directImage: CGImage?
+    @Published var usesDirectUVC = true
+
+    private let directBackend = MNDirectUVCBackend()
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -23,6 +28,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        directBackend.delegate = self
         refreshDevices()
         session.sessionPreset = .high
         videoOutput.alwaysDiscardsLateVideoFrames = true
@@ -39,6 +45,11 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func start(device: AVCaptureDevice? = nil) {
+        if usesDirectUVC {
+            directBackend.start(withWidth: 1280, height: 720, fps: 60)
+            DispatchQueue.main.async { self.isRunning = true; self.status = "Opening direct UVC…" }
+            return
+        }
         queue.async {
             self.session.beginConfiguration()
             defer { self.session.commitConfiguration() }
@@ -76,6 +87,11 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 
     func stop() {
+        if usesDirectUVC {
+            directBackend.stop()
+            DispatchQueue.main.async { self.isRunning = false; self.directImage = nil; self.status = "Stopped" }
+            return
+        }
         queue.async {
             self.session.stopRunning()
             self.audioPlayer.stop()
@@ -124,5 +140,29 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
             memcpy(destinationData, sourceData, min(Int(source[index].mDataByteSize), Int(destination[index].mDataByteSize)))
         }
         audioPlayer.scheduleBuffer(pcm)
+    }
+}
+
+
+extension CaptureSessionManager: MNDirectUVCBackendDelegate {
+    func uvcBackendDidStartWithWidth(_ width: UInt, height: UInt, fps: UInt) {
+        status = "Direct UVC live • \(width)×\(height) @ \(fps) fps"
+        isRunning = true
+    }
+
+    func uvcBackendDidReceiveRGB(_ rgb: Data, width: UInt, height: UInt) {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let provider = CGDataProvider(data: rgb as CFData)
+        directImage = CGImage(width: Int(width), height: Int(height), bitsPerComponent: 8,
+                              bitsPerPixel: 24, bytesPerRow: Int(width) * 3,
+                              space: colorSpace,
+                              bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                              provider: provider!, decode: nil, shouldInterpolate: false,
+                              intent: .defaultIntent)
+    }
+
+    func uvcBackendDidFail(_ message: String) {
+        isRunning = false
+        status = "Direct UVC failed: \(message)"
     }
 }
