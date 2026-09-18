@@ -14,6 +14,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/danylokos/LiveView.git /tmp/LiveView
           cp -R /tmp/LiveView/Thirdparties .
+
       - name: Build iPadOS 16 app
         run: |
           xcodebuild \
@@ -26,13 +27,31 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
-      - name: Package TrollStore TIPA
+
+      - name: Validate app bundle and package TIPA
         run: |
+          set -euo pipefail
+          APP="build/DerivedData/Build/Products/Release-iphoneos/Monicon.app"
+          test -d "$APP"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          test -f "$APP/$EXECUTABLE"
+          file "$APP/$EXECUTABLE" | grep -E "Mach-O|executable"
           mkdir -p build/Payload
-          cp -R build/DerivedData/Build/Products/Release-iphoneos/Monicon.app build/Payload/
+          ditto "$APP" "build/Payload/Monicon.app"
+          codesign --force --deep --sign - --entitlements Monicon/MoniconUSB.entitlements "build/Payload/Monicon.app"
           cd build
-          zip -qry Monicon-ios16.tipa Payload
+          /usr/bin/zip -qry -y Monicon-ios16.tipa Payload
+          unzip -l Monicon-ios16.tipa | grep -E "Payload/Monicon.app/Monicon$|Payload/Monicon.app/Info.plist$"
+          cat > TIPA-INSTALL.txt <<'EOF'
+1. Download the GitHub Actions artifact ZIP.
+2. Unzip that outer ZIP once.
+3. Install the inner Monicon-ios16.tipa file with TrollStore.
+Do not rename the outer artifact ZIP to .tipa.
+EOF
+
       - uses: actions/upload-artifact@v4
         with:
           name: Monicon-ios16-tipa
-          path: build/Monicon-ios16.tipa
+          path: |
+            build/Monicon-ios16.tipa
+            build/TIPA-INSTALL.txt
