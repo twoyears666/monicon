@@ -62,7 +62,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
         audioEngine.attach(audioPlayer)
         audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: nil)
         audioEngine.prepare()
-        log("manager ready")
+        log("manager", "ready")
     }
 
     func setLogMode(_ enabled: Bool) {
