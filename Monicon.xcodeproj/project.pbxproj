@@ -10,10 +10,10 @@
   000000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = sourcecode.objc.h; path = DirectUVCBackend.h; sourceTree = "<group>";};
   000000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = sourcecode.objc; path = DirectUVCBackend.m; sourceTree = "<group>";};
   000000000000000000000025 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Monicon-Bridging-Header.h; sourceTree = "<group>";};
-  000000000000000000000040 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = Localizable.strings; name = en.lproj; sourceTree = "<group>";};
-  000000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = Localizable.strings; name = zh-Hans.lproj; sourceTree = "<group>";};
-  000000000000000000000042 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = Localizable.strings; name = ko.lproj; sourceTree = "<group>";};
-  000000000000000000000043 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = Localizable.strings; name = ja.lproj; sourceTree = "<group>";};
+  000000000000000000000040 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = en.lproj/Localizable.strings; name = en.lproj; sourceTree = "<group>";};
+  000000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = zh-Hans.lproj/Localizable.strings; name = zh-Hans.lproj; sourceTree = "<group>";};
+  000000000000000000000042 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = ko.lproj/Localizable.strings; name = ko.lproj; sourceTree = "<group>";};
+  000000000000000000000043 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; path = ja.lproj/Localizable.strings; name = ja.lproj; sourceTree = "<group>";};
   000000000000000000000032 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCardAudioRouter.swift; sourceTree = "<group>";};
   000000000000000000000034 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRecorder.swift; sourceTree = "<group>";};
   000000000000000000000026 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT;};
