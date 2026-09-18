@@ -2,6 +2,16 @@ import AVFoundation
 import Combine
 import CoreMedia
 import CoreGraphics
+import Photos
+import UIKit
+
+enum VideoDisplayMode: String, CaseIterable, Identifiable {
+    case fit = "原始比例"
+    case stretch = "拉伸"
+    case fill = "填充"
+
+    var id: String { rawValue }
+}
 
 final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var isRunning = false
@@ -11,9 +21,16 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var devices: [AVCaptureDevice] = []
     @Published var directImage: CGImage?
     @Published var usesDirectUVC = true
+    @Published var displayMode: VideoDisplayMode = .fit
+    @Published var audioEnabled = true
+    @Published var isRecording = false
+    @Published var lastAction = ""
 
     private let directBackend = MNDirectUVCBackend()
     private let captureCardAudio = CaptureCardAudioRouter()
+    private let recorder = CaptureRecorder()
+    private var currentFrameWidth = 0
+    private var currentFrameHeight = 0
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -21,8 +38,6 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     private let audioEngine = AVAudioEngine()
     private let audioPlayer = AVAudioPlayerNode()
     private let queue = DispatchQueue(label: "monicon.capture", qos: .userInteractive)
-    private var currentVideoInput: AVCaptureDeviceInput?
-    private var currentAudioInput: AVCaptureDeviceInput?
 
     let resolutions = ["Auto", "1920 × 1080", "1280 × 720", "720 × 480"]
     let frameRates = ["Auto", "60 fps", "30 fps", "24 fps"]
@@ -48,10 +63,17 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     func start(device: AVCaptureDevice? = nil) {
         if usesDirectUVC {
             directBackend.start(withWidth: 1280, height: 720, fps: 60)
-            do { try captureCardAudio.start() } catch { DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
-            DispatchQueue.main.async { self.isRunning = true; if self.status == "Connect a UVC capture card" { self.status = "Opening direct UVC…" } }
+            if audioEnabled {
+                do { try captureCardAudio.start() }
+                catch { DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
+            }
+            DispatchQueue.main.async {
+                self.isRunning = true
+                if self.status == "Connect a UVC capture card" { self.status = "Opening direct UVC…" }
+            }
             return
         }
+
         queue.async {
             self.session.beginConfiguration()
             defer { self.session.commitConfiguration() }
@@ -65,34 +87,38 @@ final class CaptureSessionManager: NSObject, ObservableObject {
                 return
             }
             self.session.addInput(videoInput)
-            self.currentVideoInput = videoInput
-
             if let audioDevice = AVCaptureDevice.devices(for: .audio).first,
                let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
                self.session.canAddInput(audioInput) {
                 self.session.addInput(audioInput)
-                self.currentAudioInput = audioInput
             }
             if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
             if self.session.canAddOutput(self.audioOutput) { self.session.addOutput(self.audioOutput) }
             self.applyFormat(to: videoDevice)
             self.session.startRunning()
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .gameChat, options: [.allowBluetooth, .defaultToSpeaker])
-            try? AVAudioSession.sharedInstance().setActive(true)
-            try? self.audioEngine.start()
-            self.audioPlayer.play()
+            if self.audioEnabled {
+                try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .gameChat, options: [.allowBluetooth, .defaultToSpeaker])
+                try? AVAudioSession.sharedInstance().setActive(true)
+                try? self.audioEngine.start()
+                self.audioPlayer.play()
+            }
             DispatchQueue.main.async {
                 self.isRunning = true
-                self.status = "Live • capture-card audio only"
+                self.status = self.audioEnabled ? "Live • capture-card audio only" : "Live • audio off"
             }
         }
     }
 
     func stop() {
+        if isRecording { finishRecording() }
         if usesDirectUVC {
             directBackend.stop()
             captureCardAudio.stop()
-            DispatchQueue.main.async { self.isRunning = false; self.directImage = nil; self.status = "Stopped" }
+            DispatchQueue.main.async {
+                self.isRunning = false
+                self.directImage = nil
+                self.status = "Stopped"
+            }
             return
         }
         queue.async {
@@ -102,6 +128,81 @@ final class CaptureSessionManager: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 self.isRunning = false
                 self.status = "Stopped"
+            }
+        }
+    }
+
+    func setAudioEnabled(_ enabled: Bool) {
+        audioEnabled = enabled
+        guard isRunning else { return }
+        if enabled {
+            do {
+                if usesDirectUVC { try captureCardAudio.start() }
+                else {
+                    try AVAudioSession.sharedInstance().setActive(true)
+                    try audioEngine.start()
+                    audioPlayer.play()
+                }
+                status = "Live • capture-card audio only"
+            } catch {
+                audioEnabled = false
+                status = "USB video live • capture-card audio unavailable"
+            }
+        } else {
+            if usesDirectUVC {
+                captureCardAudio.stop()
+            } else {
+                audioPlayer.stop()
+                audioEngine.stop()
+            }
+            status = "Live • audio off"
+        }
+    }
+
+    func toggleRecording() {
+        if isRecording {
+            finishRecording()
+            return
+        }
+        guard currentFrameWidth > 0, currentFrameHeight > 0 else {
+            lastAction = "等待第一帧后才能录制"
+            return
+        }
+        do {
+            try recorder.start(width: currentFrameWidth, height: currentFrameHeight,
+                               fps: selectedFrameRate == "30 fps" ? 30 : 60)
+            isRecording = true
+            lastAction = "录制中"
+        } catch {
+            lastAction = "录制启动失败"
+        }
+    }
+
+    private func finishRecording() {
+        guard isRecording else { return }
+        isRecording = false
+        recorder.finish { [weak self] url in
+            self?.lastAction = url == nil ? "录制失败" : "录制已保存到照片"
+        }
+    }
+
+    func takeScreenshot() {
+        guard let directImage else {
+            lastAction = "暂无画面可截图"
+            return
+        }
+        let image = UIImage(cgImage: directImage)
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { [weak self] permission in
+            guard permission == .authorized || permission == .limited else {
+                DispatchQueue.main.async { self?.lastAction = "照片权限未开启" }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            } completionHandler: { _, error in
+                DispatchQueue.main.async {
+                    self?.lastAction = error == nil ? "截图已保存到照片" : "截图保存失败"
+                }
             }
         }
     }
@@ -146,14 +247,17 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
     }
 }
 
-
 extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     func uvcBackendDidStart(withWidth width: UInt, height: UInt, fps: UInt) {
-        status = "Direct UVC live • \(width)×\(height) @ \(fps) fps"
+        status = audioEnabled ? "Direct UVC live • capture-card audio" : "Direct UVC live • audio off"
         isRunning = true
     }
 
     func uvcBackendDidReceiveRGB(_ rgb: Data, width: UInt, height: UInt) {
+        currentFrameWidth = Int(width)
+        currentFrameHeight = Int(height)
+        if isRecording { recorder.append(rgb: rgb, width: Int(width), height: Int(height)) }
+
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let provider = CGDataProvider(data: rgb as CFData)
         directImage = CGImage(width: Int(width), height: Int(height), bitsPerComponent: 8,
