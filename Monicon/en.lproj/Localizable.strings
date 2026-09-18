@@ -25,3 +25,6 @@
 "record.accessibility" = "Screenshot or recording";
 "record.stop.accessibility" = "Stop recording";
 "record.hint" = "Short press to take a screenshot; double tap to start or stop recording.";
+
+"settings.log" = "Diagnostic log";
+"settings.log.help" = "When enabled, prints [Monicon][log] ok once per second and reports errors immediately.";
