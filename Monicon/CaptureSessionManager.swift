@@ -316,6 +316,11 @@ extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     func uvcBackendDidReceiveRGB(_ rgb: Data, width: UInt, height: UInt) {
         let sourceWidth = Int(width)
         let sourceHeight = Int(height)
+        let expectedBytes = sourceWidth * sourceHeight * 3
+        guard sourceWidth > 0, sourceHeight > 0, rgb.count >= expectedBytes else {
+            log("ERROR.video.frame", "invalid frame width=\(sourceWidth) height=\(sourceHeight) bytes=\(rgb.count) expected=\(expectedBytes)")
+            return
+        }
         let scale = max(25, min(100, resolutionScale))
         let frameSize = "\(sourceWidth)x\(sourceHeight) -> \(scale)%"
         if frameSize != lastLoggedFrameSize {
