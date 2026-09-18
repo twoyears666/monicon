@@ -23,14 +23,12 @@ final class CaptureCardAudioRouter {
         if engine.isRunning { engine.stop() }
         engine.disconnectNodeOutput(input)
         engine.disconnectNodeInput(engine.mainMixerNode)
-        engine.disconnectNodeOutput(engine.mainMixerNode)
         let format = input.inputFormat(forBus: 0)
         guard format.sampleRate > 0 && format.channelCount > 0 else {
             throw NSError(domain: "MoniconAudio", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "USB audio format is unavailable"])
         }
-        engine.connect(input, to: engine.mainMixerNode, format: format)
-        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: nil)
+        engine.connect(input, to: engine.mainMixerNode, format: nil)
         engine.mainMixerNode.outputVolume = 1.0
         engine.prepare()
         try engine.start()
