@@ -6,11 +6,12 @@ import Photos
 import UIKit
 
 enum VideoDisplayMode: String, CaseIterable, Identifiable {
-    case fit = "原始比例"
-    case stretch = "拉伸"
-    case fill = "填充"
+    case fit
+    case stretch
+    case fill
 
     var id: String { rawValue }
+    var localizedTitle: String { NSLocalizedString("display.\(rawValue)", comment: "") }
 }
 
 final class CaptureSessionManager: NSObject, ObservableObject {
@@ -22,6 +23,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var directImage: CGImage?
     @Published var usesDirectUVC = true
     @Published var displayMode: VideoDisplayMode = .fit
+    @Published var resolutionScale = 100
     @Published var audioEnabled = true
     @Published var isRecording = false
     @Published var lastAction = ""
@@ -39,7 +41,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     private let audioPlayer = AVAudioPlayerNode()
     private let queue = DispatchQueue(label: "monicon.capture", qos: .userInteractive)
 
-    let resolutions = ["Auto", "1920 × 1080", "1280 × 720", "720 × 480"]
+    let resolutionScales = [25, 50, 75, 100]
     let frameRates = ["Auto", "60 fps", "30 fps", "24 fps"]
 
     override init() {
@@ -62,7 +64,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
 
     func start(device: AVCaptureDevice? = nil) {
         if usesDirectUVC {
-            directBackend.start(withWidth: 1280, height: 720, fps: 60)
+            directBackend.start(withWidth: 0, height: 0, fps: 60)
             if audioEnabled {
                 do { try captureCardAudio.start() }
                 catch { DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
@@ -254,14 +256,33 @@ extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     }
 
     func uvcBackendDidReceiveRGB(_ rgb: Data, width: UInt, height: UInt) {
-        currentFrameWidth = Int(width)
-        currentFrameHeight = Int(height)
-        if isRecording { recorder.append(rgb: rgb, width: Int(width), height: Int(height)) }
+        let sourceWidth = Int(width)
+        let sourceHeight = Int(height)
+        let scale = max(25, min(100, resolutionScale))
+        let targetWidth = max(1, sourceWidth * scale / 100)
+        let targetHeight = max(1, sourceHeight * scale / 100)
+        let source = [UInt8](rgb)
+        var output = [UInt8](repeating: 0, count: targetWidth * targetHeight * 3)
+        for y in 0..<targetHeight {
+            let sourceY = min(sourceHeight - 1, y * sourceHeight / targetHeight)
+            for x in 0..<targetWidth {
+                let sourceX = min(sourceWidth - 1, x * sourceWidth / targetWidth)
+                let sourceIndex = (sourceY * sourceWidth + sourceX) * 3
+                let targetIndex = (y * targetWidth + x) * 3
+                output[targetIndex] = source[sourceIndex]
+                output[targetIndex + 1] = source[sourceIndex + 1]
+                output[targetIndex + 2] = source[sourceIndex + 2]
+            }
+        }
+        let scaledRGB = Data(output)
+        currentFrameWidth = targetWidth
+        currentFrameHeight = targetHeight
+        if isRecording { recorder.append(rgb: scaledRGB, width: targetWidth, height: targetHeight) }
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let provider = CGDataProvider(data: rgb as CFData)
-        directImage = CGImage(width: Int(width), height: Int(height), bitsPerComponent: 8,
-                              bitsPerPixel: 24, bytesPerRow: Int(width) * 3,
+        let provider = CGDataProvider(data: scaledRGB as CFData)
+        directImage = CGImage(width: targetWidth, height: targetHeight, bitsPerComponent: 8,
+                              bitsPerPixel: 24, bytesPerRow: targetWidth * 3,
                               space: colorSpace,
                               bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
                               provider: provider!, decode: nil, shouldInterpolate: false,
