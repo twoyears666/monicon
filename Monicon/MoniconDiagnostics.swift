@@ -1,5 +1,13 @@
 import Foundation
 
+private func moniconUncaughtExceptionHandler(_ exception: NSException) {
+    MoniconDiagnostics.write("CRASH.exception", """
+    name=\(exception.name.rawValue)
+    reason=\(exception.reason ?? "unknown")
+    stack=\(exception.callStackSymbols.joined(separator: " | "))
+    """)
+}
+
 enum MoniconDiagnostics {
     private static let lock = NSLock()
     private static var installed = false
@@ -7,13 +15,7 @@ enum MoniconDiagnostics {
     static func install() {
         guard !installed else { return }
         installed = true
-        NSSetUncaughtExceptionHandler { exception in
-            write("CRASH.exception", """
-            name=\(exception.name.rawValue)
-            reason=\(exception.reason ?? "unknown")
-            stack=\(exception.callStackSymbols.joined(separator: " | "))
-            """)
-        }
+        NSSetUncaughtExceptionHandler(moniconUncaughtExceptionHandler)
         write("diagnostics", "uncaught exception handler installed")
     }
 
