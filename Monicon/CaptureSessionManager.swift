@@ -1,0 +1,104 @@
+import AVFoundation
+import Combine
+import CoreMedia
+
+final class CaptureSessionManager: NSObject, ObservableObject {
+    @Published var isRunning = false
+    @Published var status = "Connect a UVC capture card"
+    @Published var selectedResolution = "Auto"
+    @Published var selectedFrameRate = "Auto"
+    @Published var devices: [AVCaptureDevice] = []
+
+    let session = AVCaptureSession()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let audioPreviewOutput = AVCaptureAudioPreviewOutput()
+    private let queue = DispatchQueue(label: "monicon.capture", qos: .userInteractive)
+    private var currentVideoInput: AVCaptureDeviceInput?
+    private var currentAudioInput: AVCaptureDeviceInput?
+
+    let resolutions = ["Auto", "1920 × 1080", "1280 × 720", "720 × 480"]
+    let frameRates = ["Auto", "60 fps", "30 fps", "24 fps"]
+
+    override init() {
+        super.init()
+        refreshDevices()
+        session.sessionPreset = .high
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.setSampleBufferDelegate(self, queue: queue)
+        audioPreviewOutput.volume = 1.0
+    }
+
+    func refreshDevices() {
+        devices = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.external],
+            mediaType: .video,
+            position: .unspecified
+        ).devices
+        status = devices.isEmpty ? "Connect a UVC capture card" : "Ready: \(devices.count) capture card(s)"
+    }
+
+    func start(device: AVCaptureDevice? = nil) {
+        queue.async {
+            self.session.beginConfiguration()
+            defer { self.session.commitConfiguration() }
+            self.session.inputs.forEach { self.session.removeInput($0) }
+            self.session.outputs.forEach { self.session.removeOutput($0) }
+            let videoDevice = device ?? self.devices.first
+            guard let videoDevice,
+                  let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
+                  self.session.canAddInput(videoInput) else {
+                DispatchQueue.main.async { self.status = "No compatible UVC video input" }
+                return
+            }
+            self.session.addInput(videoInput)
+            self.currentVideoInput = videoInput
+            let audioDevice = AVCaptureDevice.DiscoverySession(
+                deviceTypes: [.external], mediaType: .audio, position: .unspecified
+            ).devices.first
+            if let audioDevice,
+               let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
+               self.session.canAddInput(audioInput) {
+                self.session.addInput(audioInput)
+                self.currentAudioInput = audioInput
+            }
+            if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
+            if self.session.canAddOutput(self.audioPreviewOutput) { self.session.addOutput(self.audioPreviewOutput) }
+            self.applyFormat(to: videoDevice)
+            self.session.startRunning()
+            DispatchQueue.main.async {
+                self.isRunning = true
+                self.status = "Live • capture-card audio only"
+            }
+        }
+    }
+
+    func stop() {
+        queue.async {
+            self.session.stopRunning()
+            DispatchQueue.main.async {
+                self.isRunning = false
+                self.status = "Stopped"
+            }
+        }
+    }
+
+    func applyFormat(to device: AVCaptureDevice) {
+        guard selectedResolution != "Auto" || selectedFrameRate != "Auto" else { return }
+        let width = selectedResolution == "1920 × 1080" ? 1920 : selectedResolution == "1280 × 720" ? 1280 : 720
+        let height = selectedResolution == "1920 × 1080" ? 1080 : selectedResolution == "1280 × 720" ? 720 : 480
+        let fps = selectedFrameRate == "60 fps" ? 60.0 : selectedFrameRate == "30 fps" ? 30.0 : 24.0
+        guard let format = device.formats.first(where: { f in
+            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            return d.width == width && d.height == height && f.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= fps }
+        }) else { return }
+        try? device.lockForConfiguration()
+        device.activeFormat = format
+        device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        device.unlockForConfiguration()
+    }
+}
+
+extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) { }
+}
