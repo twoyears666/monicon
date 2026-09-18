@@ -43,13 +43,25 @@ static void MNUVCFrameCallback(uvc_frame_t *frame, void *userPointer);
             return;
         }
 
+        int requestedWidth = (int)width;
+        int requestedHeight = (int)height;
+        int requestedFPS = (int)fps;
+        if (requestedWidth == 0 || requestedHeight == 0) {
+            const uvc_format_desc_t *format = uvc_get_format_descs(self->_handle);
+            while (format && !format->frame_descs) { format = format->next; }
+            if (format && format->frame_descs) {
+                requestedWidth = (int)format->frame_descs->wWidth;
+                requestedHeight = (int)format->frame_descs->wHeight;
+            }
+        }
+        if (requestedFPS == 0) { requestedFPS = 60; }
         result = uvc_get_stream_ctrl_format_size(self->_handle, &self->_streamControl,
                                                   UVC_FRAME_FORMAT_YUYV,
-                                                  (int)width, (int)height, (int)fps);
+                                                  requestedWidth, requestedHeight, requestedFPS);
         if (result < 0) {
             result = uvc_get_stream_ctrl_format_size(self->_handle, &self->_streamControl,
                                                       UVC_FRAME_FORMAT_MJPEG,
-                                                      (int)width, (int)height, (int)fps);
+                                                      requestedWidth, requestedHeight, requestedFPS);
         }
         if (result < 0) {
             [self fail:[NSString stringWithFormat:@"no matching UVC mode: %s (%d)", uvc_strerror(result), result]];
@@ -64,7 +76,7 @@ static void MNUVCFrameCallback(uvc_frame_t *frame, void *userPointer);
 
         self->_running = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate uvcBackendDidStartWithWidth:width height:height fps:fps];
+            [self.delegate uvcBackendDidStartWithWidth:(NSUInteger)requestedWidth height:(NSUInteger)requestedHeight fps:(NSUInteger)requestedFPS];
         });
     });
 }
