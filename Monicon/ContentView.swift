@@ -60,9 +60,11 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        isFullscreen.toggle()
-                    }
+                    .simultaneousGesture(
+                        TapGesture(count: 2).onEnded {
+                            isFullscreen.toggle()
+                        }
+                    )
                 }
 
                 if !isFullscreen {
