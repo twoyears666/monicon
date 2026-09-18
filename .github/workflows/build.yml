@@ -10,6 +10,10 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare iOS libuvc/libusb dependencies
+        run: |
+          git clone --depth 1 https://github.com/danylokos/LiveView.git /tmp/LiveView
+          cp -R /tmp/LiveView/Thirdparties .
       - name: Build iPadOS 16 app
         run: |
           xcodebuild \
