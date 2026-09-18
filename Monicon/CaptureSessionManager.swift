@@ -27,12 +27,14 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var audioEnabled = true
     @Published var isRecording = false
     @Published var lastAction = ""
+    @Published var logMode = false
 
     private let directBackend = MNDirectUVCBackend()
     private let captureCardAudio = CaptureCardAudioRouter()
     private let recorder = CaptureRecorder()
     private var currentFrameWidth = 0
     private var currentFrameHeight = 0
+    private var logTimer: Timer?
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -55,6 +57,24 @@ final class CaptureSessionManager: NSObject, ObservableObject {
         audioEngine.attach(audioPlayer)
         audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: nil)
         audioEngine.prepare()
+        log("manager ready")
+    }
+
+    func setLogMode(_ enabled: Bool) {
+        logMode = enabled
+        logTimer?.invalidate()
+        logTimer = nil
+        if enabled {
+            logTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                self?.log("ok")
+            }
+            log("log mode enabled")
+        }
+    }
+
+    private func log(_ message: String) {
+        guard logMode || message.hasPrefix("ERROR") else { return }
+        print("[Monicon][\(message.hasPrefix("ERROR") ? "error" : "log")] \(message)")
     }
 
     func refreshDevices() {
@@ -67,7 +87,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
             directBackend.start(withWidth: 0, height: 0, fps: 60)
             if audioEnabled {
                 do { try captureCardAudio.start() }
-                catch { DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
+                catch { self.log("ERROR audio start: \(error.localizedDescription)"); DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
             }
             DispatchQueue.main.async {
                 self.isRunning = true
@@ -147,6 +167,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
                 }
                 status = "Live • capture-card audio only"
             } catch {
+                log("ERROR audio toggle: \(error.localizedDescription)")
                 audioEnabled = false
                 status = "USB video live • capture-card audio unavailable"
             }
@@ -290,6 +311,7 @@ extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     }
 
     func uvcBackendDidFail(_ message: String) {
+        log("ERROR UVC: \(message)")
         isRunning = false
         status = "Direct UVC failed: \(message)"
     }
