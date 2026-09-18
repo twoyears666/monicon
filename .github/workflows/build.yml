@@ -42,12 +42,7 @@ jobs:
           cd build
           /usr/bin/zip -qry -y Monicon-ios16.tipa Payload
           unzip -l Monicon-ios16.tipa | grep -E "Payload/Monicon.app/Monicon$|Payload/Monicon.app/Info.plist$"
-          cat > TIPA-INSTALL.txt <<'EOF'
-1. Download the GitHub Actions artifact ZIP.
-2. Unzip that outer ZIP once.
-3. Install the inner Monicon-ios16.tipa file with TrollStore.
-Do not rename the outer artifact ZIP to .tipa.
-EOF
+          printf '%s\n' "1. Download the GitHub Actions artifact ZIP." "2. Unzip that outer ZIP once." "3. Install the inner Monicon-ios16.tipa file with TrollStore." "Do not rename the outer artifact ZIP to .tipa." > TIPA-INSTALL.txt
 
       - uses: actions/upload-artifact@v4
         with:
