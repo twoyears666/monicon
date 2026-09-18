@@ -145,7 +145,7 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
 
 
 extension CaptureSessionManager: MNDirectUVCBackendDelegate {
-    func uvcBackendDidStartWithWidth(_ width: UInt, height: UInt, fps: UInt) {
+    func uvcBackendDidStart(withWidth width: UInt, height: UInt, fps: UInt) {
         status = "Direct UVC live • \(width)×\(height) @ \(fps) fps"
         isRunning = true
     }
