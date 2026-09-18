@@ -11,7 +11,9 @@ final class CaptureSessionManager: NSObject, ObservableObject {
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let audioPreviewOutput = AVCaptureAudioPreviewOutput()
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private let audioEngine = AVAudioEngine()
+    private let audioPlayer = AVAudioPlayerNode()
     private let queue = DispatchQueue(label: "monicon.capture", qos: .userInteractive)
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
@@ -25,15 +27,14 @@ final class CaptureSessionManager: NSObject, ObservableObject {
         session.sessionPreset = .high
         videoOutput.alwaysDiscardsLateVideoFrames = true
         videoOutput.setSampleBufferDelegate(self, queue: queue)
-        audioPreviewOutput.volume = 1.0
+        audioOutput.setSampleBufferDelegate(self, queue: queue)
+        audioEngine.attach(audioPlayer)
+        audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: nil)
+        audioEngine.prepare()
     }
 
     func refreshDevices() {
-        devices = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
-            mediaType: .video,
-            position: .unspecified
-        ).devices
+        devices = AVCaptureDevice.devices(for: .video)
         status = devices.isEmpty ? "Connect a UVC capture card" : "Ready: \(devices.count) capture card(s)"
     }
 
@@ -52,19 +53,21 @@ final class CaptureSessionManager: NSObject, ObservableObject {
             }
             self.session.addInput(videoInput)
             self.currentVideoInput = videoInput
-            let audioDevice = AVCaptureDevice.DiscoverySession(
-                deviceTypes: [.external], mediaType: .audio, position: .unspecified
-            ).devices.first
-            if let audioDevice,
+
+            if let audioDevice = AVCaptureDevice.devices(for: .audio).first,
                let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
                self.session.canAddInput(audioInput) {
                 self.session.addInput(audioInput)
                 self.currentAudioInput = audioInput
             }
             if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
-            if self.session.canAddOutput(self.audioPreviewOutput) { self.session.addOutput(self.audioPreviewOutput) }
+            if self.session.canAddOutput(self.audioOutput) { self.session.addOutput(self.audioOutput) }
             self.applyFormat(to: videoDevice)
             self.session.startRunning()
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .gameChat, options: [.allowBluetooth, .defaultToSpeaker])
+            try? AVAudioSession.sharedInstance().setActive(true)
+            try? self.audioEngine.start()
+            self.audioPlayer.play()
             DispatchQueue.main.async {
                 self.isRunning = true
                 self.status = "Live • capture-card audio only"
@@ -75,6 +78,8 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     func stop() {
         queue.async {
             self.session.stopRunning()
+            self.audioPlayer.stop()
+            self.audioEngine.stop()
             DispatchQueue.main.async {
                 self.isRunning = false
                 self.status = "Stopped"
@@ -99,6 +104,25 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     }
 }
 
-extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) { }
+extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard output === audioOutput,
+              let description = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let format = AVAudioFormat(cmAudioFormatDescription: description),
+              let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleBuffer.numSamples)) else { return }
+        pcm.frameLength = AVAudioFrameCount(sampleBuffer.numSamples)
+        var size = 0
+        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, bufferListSizeNeededOut: &size, bufferListOut: nil, bufferListSize: 0, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: 0, blockBufferOut: nil)
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        let list = raw.assumingMemoryBound(to: AudioBufferList.self)
+        guard CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, bufferListSizeNeededOut: &size, bufferListOut: list, bufferListSize: size, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: 0, blockBufferOut: nil) == noErr else { return }
+        let source = UnsafeMutableAudioBufferListPointer(list)
+        let destination = UnsafeMutableAudioBufferListPointer(pcm.mutableAudioBufferList)
+        for index in 0..<min(source.count, destination.count) {
+            guard let sourceData = source[index].mData, let destinationData = destination[index].mData else { continue }
+            memcpy(destinationData, sourceData, min(Int(source[index].mDataByteSize), Int(destination[index].mDataByteSize)))
+        }
+        audioPlayer.scheduleBuffer(pcm)
+    }
 }
