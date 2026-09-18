@@ -1,4 +1,4 @@
-# Monicon
+# univulcal
 
 Monicon is an iPadOS 16 TrollStore-only capture-card viewer for playing Nintendo Switch (or other HDMI source) video on iPad.
 
