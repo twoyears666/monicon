@@ -27,4 +27,4 @@
 "record.hint" = "短押しでスクリーンショット、ダブルタップで録画を開始または停止します。";
 
 "settings.log" = "診断ログ";
-"settings.log.help" = "有効にすると毎秒 [Monicon][log] ok を出力し、エラーを直ちに報告します。";
+"settings.log.help" = "有効にすると毎秒 [Monicon][log] ok を出力し、エラーを直ちに報告して「ファイル」> UVC读卡器 > monicon.log に保存します。";
