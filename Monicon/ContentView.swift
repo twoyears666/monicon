@@ -14,7 +14,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 if !isFullscreen {
                     HStack {
-                        Label("MONICON", systemImage: "gamecontroller.fill")
+                        Label(L("app.name"), systemImage: "gamecontroller.fill")
                             .font(.headline.weight(.bold))
                         Spacer()
                         Circle().fill(capture.isRunning ? .green : .gray).frame(width: 8, height: 8)
