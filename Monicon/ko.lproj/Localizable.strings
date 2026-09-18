@@ -25,3 +25,6 @@
 "record.accessibility" = "스크린샷 또는 녹화";
 "record.stop.accessibility" = "녹화 중지";
 "record.hint" = "짧게 누르면 스크린샷, 두 번 누르면 녹화를 시작하거나 중지합니다.";
+
+"settings.log" = "진단 로그";
+"settings.log.help" = "켜면 매초 [Monicon][log] ok를 출력하고 오류를 즉시 보고합니다.";
