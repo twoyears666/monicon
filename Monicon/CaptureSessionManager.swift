@@ -85,10 +85,6 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     func start(device: AVCaptureDevice? = nil) {
         if usesDirectUVC {
             directBackend.start(withWidth: 0, height: 0, fps: 60)
-            if audioEnabled {
-                do { try captureCardAudio.start() }
-                catch { self.log("ERROR audio start: \(error.localizedDescription)"); DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
-            }
             DispatchQueue.main.async {
                 self.isRunning = true
                 if self.status == "Connect a UVC capture card" { self.status = "Opening direct UVC…" }
@@ -272,6 +268,15 @@ extension CaptureSessionManager: AVCaptureVideoDataOutputSampleBufferDelegate, A
 
 extension CaptureSessionManager: MNDirectUVCBackendDelegate {
     func uvcBackendDidStart(withWidth width: UInt, height: UInt, fps: UInt) {
+        if audioEnabled {
+            do {
+                try captureCardAudio.start()
+                log("USB audio route active")
+            } catch {
+                log("ERROR audio start: \(error.localizedDescription)")
+                status = "USB video opened; capture-card audio unavailable"
+            }
+        }
         status = audioEnabled ? "Direct UVC live • capture-card audio" : "Direct UVC live • audio off"
         isRunning = true
     }
