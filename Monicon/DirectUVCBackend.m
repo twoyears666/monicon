@@ -118,9 +118,12 @@ static void MNUVCFrameCallback(uvc_frame_t *frame, void *userPointer) {
 
     uvc_error_t result = uvc_any2rgb(frame, rgb);
     if (result == UVC_SUCCESS) {
-        NSData *data = [NSData dataWithBytes:rgb->data length:rgb->data_bytes];
+        const NSUInteger outputWidth = frame->width;
+        const NSUInteger outputHeight = frame->height;
+        const NSUInteger outputBytes = rgb->data_bytes;
+        NSData *data = [NSData dataWithBytes:rgb->data length:outputBytes];
         dispatch_async(dispatch_get_main_queue(), ^{
-            [backend.delegate uvcBackendDidReceiveRGB:data width:rgb->width height:rgb->height];
+            [backend.delegate uvcBackendDidReceiveRGB:data width:outputWidth height:outputHeight];
         });
     }
     uvc_free_frame(rgb);
