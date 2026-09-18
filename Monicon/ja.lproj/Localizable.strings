@@ -1,4 +1,4 @@
-"app.name" = "MONICON";
+"app.name" = "UVC读卡器";
 "status.live" = "ライブ";
 "status.idle" = "待機中";
 "button.start" = "開始";
