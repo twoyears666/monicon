@@ -13,6 +13,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     @Published var usesDirectUVC = true
 
     private let directBackend = MNDirectUVCBackend()
+    private let captureCardAudio = CaptureCardAudioRouter()
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -47,7 +48,8 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     func start(device: AVCaptureDevice? = nil) {
         if usesDirectUVC {
             directBackend.start(withWidth: 1280, height: 720, fps: 60)
-            DispatchQueue.main.async { self.isRunning = true; self.status = "Opening direct UVC…" }
+            do { try captureCardAudio.start() } catch { DispatchQueue.main.async { self.status = "USB video opened; capture-card audio unavailable" } }
+            DispatchQueue.main.async { self.isRunning = true; if self.status == "Connect a UVC capture card" { self.status = "Opening direct UVC…" } }
             return
         }
         queue.async {
@@ -89,6 +91,7 @@ final class CaptureSessionManager: NSObject, ObservableObject {
     func stop() {
         if usesDirectUVC {
             directBackend.stop()
+            captureCardAudio.stop()
             DispatchQueue.main.async { self.isRunning = false; self.directImage = nil; self.status = "Stopped" }
             return
         }
